@@ -22,9 +22,6 @@ export LC_ALL=C.UTF-8
 [ -x "$(which jq 2>/dev/null)" ] \
     || { echo "Missing build script dependency: jq" >&2; exit 1; }
 
-[ -x "$(which sponge 2>/dev/null)" ] \
-    || { echo "Missing build script dependency: sponge" >&2; exit 1; }
-
 source "$CI_TOOLS_PATH/helper/common.sh.inc"
 source "$CI_TOOLS_PATH/helper/container.sh.inc"
 source "$CI_TOOLS_PATH/helper/container-alpine.sh.inc"
