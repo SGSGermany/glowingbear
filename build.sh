@@ -19,6 +19,12 @@ export LC_ALL=C.UTF-8
 [ -v CI_TOOLS_PATH ] && [ -d "$CI_TOOLS_PATH" ] \
     || { echo "Invalid build environment: Environment variable 'CI_TOOLS_PATH' not set or invalid" >&2; exit 1; }
 
+[ -x "$(which jq 2>/dev/null)" ] \
+    || { echo "Missing build script dependency: jq" >&2; exit 1; }
+
+[ -x "$(which sponge 2>/dev/null)" ] \
+    || { echo "Missing build script dependency: sponge" >&2; exit 1; }
+
 source "$CI_TOOLS_PATH/helper/common.sh.inc"
 source "$CI_TOOLS_PATH/helper/container.sh.inc"
 source "$CI_TOOLS_PATH/helper/container-alpine.sh.inc"
@@ -67,6 +73,18 @@ rsync -v -rl "$BUILD_MOUNT/usr/src/glowingbear/build/" "$MOUNT/usr/src/glowingbe
 
 echo + "rm -f …/usr/src/glowingbear/glowingbear/package.json" >&2
 rm -f "$MOUNT/usr/src/glowingbear/glowingbear/package.json"
+
+echo + "jq -e --arg VERSION $(quote "$VERSION") '.version = \$VERSION' …/usr/src/glowingbear/glowingbear/manifest.json | sponge …" >&2
+jq -e --arg VERSION "$VERSION" '.version = $VERSION' "$MOUNT/usr/src/glowingbear/glowingbear/manifest.json" \
+    | sponge "$MOUNT/usr/src/glowingbear/glowingbear/manifest.json"
+
+echo + "jq -e --arg VERSION $(quote "$VERSION") '.version = \$VERSION' …/usr/src/glowingbear/glowingbear/manifest.webapp | sponge …" >&2
+jq -e --arg VERSION "$VERSION" '.version = $VERSION' "$MOUNT/usr/src/glowingbear/glowingbear/manifest.webapp" \
+    | sponge "$MOUNT/usr/src/glowingbear/glowingbear/manifest.webapp"
+
+echo + "sed -i -e \"s/>Glowing Bear version [^<]*</>Glowing Bear version \$VERSION</\" …/usr/src/glowingbear/glowingbear/index.html" >&2
+sed -i -e "s/>Glowing Bear version [^<]*</>Glowing Bear version $(sed -e 's/[\/&]/\\&/g' <<< "$VERSION")</" \
+    "$MOUNT/usr/src/glowingbear/glowingbear/index.html"
 
 cmd buildah run "$CONTAINER" -- \
     /bin/sh -c "printf '%s=%s\n' \"\$@\" > /usr/src/glowingbear/version_info" -- \
