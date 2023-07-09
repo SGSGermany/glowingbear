@@ -41,8 +41,17 @@ BUILD_CONTAINER="$(buildah from "$BASE_IMAGE")"
 echo + "BUILD_MOUNT=\"\$(buildah mount $(quote "$BUILD_CONTAINER"))\"" >&2
 BUILD_MOUNT="$(buildah mount "$BUILD_CONTAINER")"
 
-git_clone "$GIT_REPO" "$GIT_COMMIT" \
+git_clone "$GIT_REPO" "$GIT_REF" \
     "$BUILD_MOUNT/usr/src/glowingbear" "<builder> …/usr/src/glowingbear"
+
+echo + "HASH=\"\$(git -C '<builder> …/usr/src/glowingbear' rev-parse HEAD)\"" >&2
+HASH="$(git -C "$BUILD_MOUNT/usr/src/glowingbear" rev-parse HEAD)"
+
+echo + "HASH_SHORT=\"\$(git -C '<builder> …/usr/src/glowingbear' rev-parse --short HEAD)\"" >&2
+HASH_SHORT="$(git -C "$BUILD_MOUNT/usr/src/glowingbear" rev-parse --short HEAD)"
+
+echo + "VERSION=\"\$(jq -re '.version' '<builder> …/usr/src/glowingbear/package.json')-\$HASH_SHORT\"" >&2
+VERSION="$(jq -re '.version' "$BUILD_MOUNT/usr/src/glowingbear/package.json")-$HASH_SHORT"
 
 pkg_install "$BUILD_CONTAINER" \
     nodejs \
@@ -89,7 +98,7 @@ sed -i -e "s/>Glowing Bear version [^<]*</>Glowing Bear version $(sed -e 's/[\/&
 cmd buildah run "$CONTAINER" -- \
     /bin/sh -c "printf '%s=%s\n' \"\$@\" > /usr/src/glowingbear/version_info" -- \
         VERSION "$VERSION" \
-        HASH "$GIT_COMMIT"
+        HASH "$HASH"
 
 cmd buildah run "$CONTAINER" -- \
     chown glowingbear:glowingbear "/var/www/html"
@@ -98,7 +107,7 @@ cleanup "$CONTAINER"
 
 cmd buildah config \
     --env GLOWING_BEAR_VERSION="$VERSION" \
-    --env GLOWING_BEAR_HASH="$GIT_COMMIT" \
+    --env GLOWING_BEAR_HASH="$HASH" \
     "$CONTAINER"
 
 cmd buildah config \
