@@ -41,17 +41,44 @@ BUILD_CONTAINER="$(buildah from "$BASE_IMAGE")"
 echo + "BUILD_MOUNT=\"\$(buildah mount $(quote "$BUILD_CONTAINER"))\"" >&2
 BUILD_MOUNT="$(buildah mount "$BUILD_CONTAINER")"
 
-git_clone "$GIT_REPO" "$GIT_REF" \
-    "$BUILD_MOUNT/usr/src/glowingbear" "<builder> …/usr/src/glowingbear"
+if [ -n "${VERSION:-}" ] && [ -n "${HASH:-}" ]; then
+    echo + "[[ $(quote "$VERSION") =~ ^([0-9]+\.[0-9]+\.[0-9]+-([a-f0-9]+))([+~-]|$) ]]" >&2
+    if ! [[ "$VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+-([a-f0-9]+))([+~-]|$) ]]; then
+        echo "Invalid build environment: Environment variable 'VERSION' is invalid: $VERSION" >&2
+        exit 1
+    fi
 
-echo + "HASH=\"\$(git -C '<builder> …/usr/src/glowingbear' rev-parse HEAD)\"" >&2
-HASH="$(git -C "$BUILD_MOUNT/usr/src/glowingbear" rev-parse HEAD)"
+    echo + "HASH_SHORT=\"\${BASH_REMATCH[2]}\"" >&2
+    HASH_SHORT="${BASH_REMATCH[2]}"
 
-echo + "HASH_SHORT=\"\$(git -C '<builder> …/usr/src/glowingbear' rev-parse --short HEAD)\"" >&2
-HASH_SHORT="$(git -C "$BUILD_MOUNT/usr/src/glowingbear" rev-parse --short HEAD)"
+    echo + "[[ $(quote "$HASH") =~ ^[a-f0-9]{40}[a-f0-9]{24}?$ ]]" >&2
+    if ! [[ "$HASH" =~ ^[a-f0-9]{40}[a-f0-9]{24}?$ ]]; then
+        echo "Invalid build environment: Environment variable 'HASH' is invalid: $HASH" >&2
+        exit 1
+    fi
 
-echo + "VERSION=\"\$(jq -re '.version' '<builder> …/usr/src/glowingbear/package.json')-\$HASH_SHORT\"" >&2
-VERSION="$(jq -re '.version' "$BUILD_MOUNT/usr/src/glowingbear/package.json")-$HASH_SHORT"
+    echo + "[[ $(quote "$HASH") == $(quote "$HASH_SHORT")* ]]" >&2
+    if [[ "$HASH" != "$HASH_SHORT"* ]]; then
+        echo "Invalid build environment: Environment variables 'VERSION' (${VERSION@Q})" \
+            "and 'HASH' (${HASH@Q}) contradict each other" >&2
+        exit 1
+    fi
+
+    git_clone "$GIT_REPO" "$HASH" \
+        "$BUILD_MOUNT/usr/src/glowingbear" "<builder> …/usr/src/glowingbear"
+else
+    git_clone "$GIT_REPO" "$GIT_REF" \
+        "$BUILD_MOUNT/usr/src/glowingbear" "<builder> …/usr/src/glowingbear"
+
+    echo + "HASH=\"\$(git -C '<builder> …/usr/src/glowingbear' rev-parse HEAD)\"" >&2
+    HASH="$(git -C "$BUILD_MOUNT/usr/src/glowingbear" rev-parse HEAD)"
+
+    echo + "HASH_SHORT=\"\$(git -C '<builder> …/usr/src/glowingbear' rev-parse --short HEAD)\"" >&2
+    HASH_SHORT="$(git -C "$BUILD_MOUNT/usr/src/glowingbear" rev-parse --short HEAD)"
+
+    echo + "VERSION=\"\$(jq -re '.version' '<builder> …/usr/src/glowingbear/package.json')-\$HASH_SHORT\"" >&2
+    VERSION="$(jq -re '.version' "$BUILD_MOUNT/usr/src/glowingbear/package.json")-$HASH_SHORT"
+fi
 
 pkg_install "$BUILD_CONTAINER" \
     nodejs \
