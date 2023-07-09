@@ -112,6 +112,8 @@ chkupd_image_age() {
     fi
 }
 
-if ! chkupd_image_age "$REGISTRY/$OWNER/$IMAGE" "$TAG" "+1 month" > /dev/null 2>&1; then
+if ! chkupd_image_age "$REGISTRY/$OWNER/$IMAGE" "$TAG" "+1 month" > /dev/null; then
+    echo "Defering rebuild decision, check whether base image is still up-to-date..." >&2
+
     chkupd_baseimage "$REGISTRY/$OWNER/$IMAGE" "$TAG" || exit 0
 fi
