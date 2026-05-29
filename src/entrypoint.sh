@@ -27,8 +27,12 @@ if [ "$1" == "glowingbear" ]; then
         "/var/www/glowingbear_version_info"
 
     # do nothing, Glowing Bear is just a static website ;-)
+    # `sleep` asynchronously and `wait` for it, but kill it when a SIGINT/SIGTERM is received
     echo "Sleeping..."
-    sleep infinity
+
+    sleep infinity &
+    trap "kill $!" INT TERM
+    wait
 fi
 
 exec "$@"
