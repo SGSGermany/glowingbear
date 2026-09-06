@@ -84,7 +84,7 @@ pkg_install "$BUILD_CONTAINER" \
 cmd buildah run --workingdir "/usr/src/glowingbear" "$BUILD_CONTAINER" -- \
     npm install
 
-cmd buildah run --workingdir "/usr/src/glowingbear" "$BUILD_CONTAINER" -- \
+cmd buildah run --workingdir "/usr/src/glowingbear" --env GIT_COMMIT="$HASH_SHORT" "$BUILD_CONTAINER" -- \
     npm run build
 
 echo + "CONTAINER=\"\$(buildah from $(quote "$BASE_IMAGE"))\"" >&2
@@ -106,18 +106,6 @@ rsync -v -rl "$BUILD_MOUNT/usr/src/glowingbear/build/" "$MOUNT/usr/src/glowingbe
 
 echo + "rm -f …/usr/src/glowingbear/glowingbear/package.json" >&2
 rm -f "$MOUNT/usr/src/glowingbear/glowingbear/package.json"
-
-echo + "jq -e --arg VERSION $(quote "$VERSION") '.version = \$VERSION' …/usr/src/glowingbear/glowingbear/manifest.json | sponge …" >&2
-jq -e --arg VERSION "$VERSION" '.version = $VERSION' "$MOUNT/usr/src/glowingbear/glowingbear/manifest.json" \
-    | sponge "$MOUNT/usr/src/glowingbear/glowingbear/manifest.json"
-
-echo + "jq -e --arg VERSION $(quote "$VERSION") '.version = \$VERSION' …/usr/src/glowingbear/glowingbear/manifest.webapp | sponge …" >&2
-jq -e --arg VERSION "$VERSION" '.version = $VERSION' "$MOUNT/usr/src/glowingbear/glowingbear/manifest.webapp" \
-    | sponge "$MOUNT/usr/src/glowingbear/glowingbear/manifest.webapp"
-
-echo + "sed -i -e \"s/>Glowing Bear version [^<]*</>Glowing Bear version \$VERSION</\" …/usr/src/glowingbear/glowingbear/index.html" >&2
-sed -i -e "s/>Glowing Bear version [^<]*</>Glowing Bear version $(sed -e 's/[\/&]/\\&/g' <<< "$VERSION")</" \
-    "$MOUNT/usr/src/glowingbear/glowingbear/index.html"
 
 cmd buildah run "$CONTAINER" -- \
     /bin/sh -c "printf '%s=%s\n' \"\$@\" > /usr/src/glowingbear/version_info" -- \
