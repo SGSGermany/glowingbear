@@ -47,7 +47,6 @@ jobs:
         run: |
           source <(./tags.sh "$GITHUB_RUN_ID.$GITHUB_RUN_NUMBER")
           echo "VERSION=$VERSION" | tee -a "$GITHUB_ENV"
-          echo "HASH=$HASH" | tee -a "$GITHUB_ENV"
           echo "TAGS=$TAGS" | tee -a "$GITHUB_ENV"
 
       - name: Build container image

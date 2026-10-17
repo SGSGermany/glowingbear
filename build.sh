@@ -30,6 +30,9 @@ source "$CI_TOOLS_PATH/helper/git.sh.inc"
 BUILD_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$BUILD_DIR/container.env"
 
+[ -n "${VERSION:-}" ] || [ "$TAGS" == "latest" ] \
+    || { echo "Invalid build environment: Incomplete version information" >&2; exit 1; }
+
 readarray -t -d' ' TAGS < <(printf '%s' "$TAGS")
 
 echo + "BUILD_CONTAINER=\"\$(buildah from $(quote "$BASE_IMAGE"))\"" >&2
@@ -38,44 +41,14 @@ BUILD_CONTAINER="$(buildah from "$BASE_IMAGE")"
 echo + "BUILD_MOUNT=\"\$(buildah mount $(quote "$BUILD_CONTAINER"))\"" >&2
 BUILD_MOUNT="$(buildah mount "$BUILD_CONTAINER")"
 
-if [ -n "${VERSION:-}" ] && [ -n "${HASH:-}" ]; then
-    echo + "[[ $(quote "$VERSION") =~ ^([0-9]+\.[0-9]+\.[0-9]+-([a-f0-9]+))([+~-]|$) ]]" >&2
-    if ! [[ "$VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+-([a-f0-9]+))([+~-]|$) ]]; then
-        echo "Invalid build environment: Environment variable 'VERSION' is invalid: $VERSION" >&2
-        exit 1
-    fi
+git_clone "$GIT_REPO" "$GIT_REF" \
+    "$BUILD_MOUNT/usr/src/glowingbear" "<builder> …/usr/src/glowingbear"
 
-    echo + "HASH_SHORT=\"\${BASH_REMATCH[2]}\"" >&2
-    HASH_SHORT="${BASH_REMATCH[2]}"
+echo + "HASH=\"\$(git -C '<builder> …/usr/src/glowingbear' rev-parse HEAD)\"" >&2
+HASH="$(git -C "$BUILD_MOUNT/usr/src/glowingbear" rev-parse HEAD)"
 
-    echo + "[[ $(quote "$HASH") =~ ^[a-f0-9]{40}[a-f0-9]{24}?$ ]]" >&2
-    if ! [[ "$HASH" =~ ^[a-f0-9]{40}[a-f0-9]{24}?$ ]]; then
-        echo "Invalid build environment: Environment variable 'HASH' is invalid: $HASH" >&2
-        exit 1
-    fi
-
-    echo + "[[ $(quote "$HASH") == $(quote "$HASH_SHORT")* ]]" >&2
-    if [[ "$HASH" != "$HASH_SHORT"* ]]; then
-        echo "Invalid build environment: Environment variables 'VERSION' (${VERSION@Q})" \
-            "and 'HASH' (${HASH@Q}) contradict each other" >&2
-        exit 1
-    fi
-
-    git_clone "$GIT_REPO" "$HASH" \
-        "$BUILD_MOUNT/usr/src/glowingbear" "<builder> …/usr/src/glowingbear"
-else
-    git_clone "$GIT_REPO" "$GIT_REF" \
-        "$BUILD_MOUNT/usr/src/glowingbear" "<builder> …/usr/src/glowingbear"
-
-    echo + "HASH=\"\$(git -C '<builder> …/usr/src/glowingbear' rev-parse HEAD)\"" >&2
-    HASH="$(git -C "$BUILD_MOUNT/usr/src/glowingbear" rev-parse HEAD)"
-
-    echo + "HASH_SHORT=\"\$(git -C '<builder> …/usr/src/glowingbear' rev-parse --short HEAD)\"" >&2
-    HASH_SHORT="$(git -C "$BUILD_MOUNT/usr/src/glowingbear" rev-parse --short HEAD)"
-
-    echo + "VERSION=\"\$(jq -re '.version' '<builder> …/usr/src/glowingbear/package.json')-\$HASH_SHORT\"" >&2
-    VERSION="$(jq -re '.version' "$BUILD_MOUNT/usr/src/glowingbear/package.json")-$HASH_SHORT"
-fi
+echo + "HASH_SHORT=\"\$(git -C '<builder> …/usr/src/glowingbear' rev-parse --short HEAD)\"" >&2
+HASH_SHORT="$(git -C "$BUILD_MOUNT/usr/src/glowingbear" rev-parse --short HEAD)"
 
 pkg_install "$BUILD_CONTAINER" \
     nodejs \
@@ -120,7 +93,7 @@ cleanup "$CONTAINER"
 con_cleanup "$CONTAINER"
 
 cmd buildah config \
-    --env GLOWING_BEAR_VERSION="$VERSION" \
+    --env GLOWING_BEAR_VERSION="${VERSION:-}" \
     --env GLOWING_BEAR_HASH="$HASH" \
     "$CONTAINER"
 
@@ -137,10 +110,11 @@ cmd buildah config \
 cmd buildah config \
     --annotation org.opencontainers.image.title="Glowing Bear" \
     --annotation org.opencontainers.image.description="A container running Glowing Bear, a web frontend for the WeeChat IRC client." \
-    --annotation org.opencontainers.image.version="$VERSION" \
     --annotation org.opencontainers.image.url="https://github.com/SGSGermany/glowingbear" \
     --annotation org.opencontainers.image.authors="SGS Serious Gaming & Simulations GmbH" \
     --annotation org.opencontainers.image.vendor="SGS Serious Gaming & Simulations GmbH" \
+    --annotation org.opencontainers.image.version="${VERSION:-}" \
+    --annotation org.opencontainers.image.revision="$HASH" \
     --annotation org.opencontainers.image.base.name="$BASE_IMAGE" \
     --annotation org.opencontainers.image.base.digest="$(podman image inspect --format '{{.Digest}}' "$BASE_IMAGE")" \
     --annotation org.opencontainers.image.created="$(date -u +'%+4Y-%m-%dT%H:%M:%SZ')" \
